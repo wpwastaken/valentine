@@ -46,20 +46,11 @@
             transition: transform 0.2s ease;
         }
 
-        /* Den tomma rutan */
-        .tile.empty {
-            background: #fff0f0;
-            cursor: default;
-            opacity: 0.3;
-            background-image: none; /* Dölj bilden på den tomma rutan initialt */
-        }
-
-        /* När pusslet är löst visar vi bilden på sista biten */
-        .tile.solved-empty {
-            background-image: url('valentine.jpg');
-            background-size: 300px 300px;
-            opacity: 1;
-            cursor: default;
+        /* Markera vald ruta */
+        .tile.selected {
+            border: 2px solid #fff;
+            box-shadow: 0 0 10px #d6336c;
+            z-index: 10;
         }
 
         /* Sektionen som visas när man vinner */
@@ -154,6 +145,7 @@
         const size = 3; // 3x3 grid
         const container = document.getElementById('puzzle-container');
         let tiles = []; // Håller koll på nuvarande ordning
+        let selectedTileIndex = null; // Håller koll på vilken ruta som är klickad
         
         // Den lösta ordningen (0-8)
         const solvedState = [0, 1, 2, 3, 4, 5, 6, 7, 8];
@@ -172,39 +164,11 @@
         }
 
         function shuffleTiles() {
-            // Vi börjar med det lösta tillståndet där 8 är den tomma rutan (längst ner till höger)
-            let emptyIndex = 8;
-            let previousIndex = -1;
-
-            // Gör 100 slumpmässiga drag för att blanda
-            for (let i = 0; i < 150; i++) {
-                const neighbors = getNeighbors(emptyIndex);
-                // Försök att inte gå tillbaka direkt till rutan vi kom ifrån för bättre blandning
-                const validNeighbors = neighbors.filter(n => n !== previousIndex);
-                
-                // Om vi fastnar (kantfall), ta vilken granne som helst
-                const targetIndex = validNeighbors.length > 0 
-                    ? validNeighbors[Math.floor(Math.random() * validNeighbors.length)]
-                    : neighbors[Math.floor(Math.random() * neighbors.length)];
-
-                // Byt plats
-                [tiles[emptyIndex], tiles[targetIndex]] = [tiles[targetIndex], tiles[emptyIndex]];
-                previousIndex = emptyIndex;
-                emptyIndex = targetIndex;
+            // Enkel slumpmässig blandning för alla rutor
+            for (let i = tiles.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
             }
-        }
-
-        function getNeighbors(index) {
-            const row = Math.floor(index / size);
-            const col = index % size;
-            const neighbors = [];
-
-            if (row > 0) neighbors.push(index - size); // Upp
-            if (row < size - 1) neighbors.push(index + size); // Ner
-            if (col > 0) neighbors.push(index - 1); // Vänster
-            if (col < size - 1) neighbors.push(index + 1); // Höger
-
-            return neighbors;
         }
 
         function renderGrid() {
@@ -221,27 +185,30 @@
                 // Sätt bakgrundsposition (negativa värden för att flytta bilden)
                 div.style.backgroundPosition = `-${col * 100}px -${row * 100}px`;
 
-                // Om det är bit nummer 8, är det den "tomma" rutan
-                if (tileIndex === 8) {
-                    div.classList.add('empty');
-                    div.id = 'empty-tile';
-                } else {
-                    // Lägg till klick-event bara på icke-tomma rutor
-                    div.onclick = () => moveTile(positionIndex);
+                // Markera om den är vald
+                if (positionIndex === selectedTileIndex) {
+                    div.classList.add('selected');
                 }
+
+                div.onclick = () => handleTileClick(positionIndex);
 
                 container.appendChild(div);
             });
         }
 
-        function moveTile(positionIndex) {
-            const emptyPosition = tiles.indexOf(8); // Hitta var den tomma rutan är nu
-            const neighbors = getNeighbors(emptyPosition);
-
-            // Om rutan vi klickade på är granne med den tomma rutan
-            if (neighbors.includes(positionIndex)) {
-                // Byt plats i arrayen
-                [tiles[emptyPosition], tiles[positionIndex]] = [tiles[positionIndex], tiles[emptyPosition]];
+        function handleTileClick(index) {
+            if (selectedTileIndex === null) {
+                // Ingen ruta vald än, välj denna
+                selectedTileIndex = index;
+                renderGrid();
+            } else if (selectedTileIndex === index) {
+                // Klickade på samma ruta igen, avmarkera
+                selectedTileIndex = null;
+                renderGrid();
+            } else {
+                // Två olika rutor valda, byt plats på dem
+                [tiles[selectedTileIndex], tiles[index]] = [tiles[index], tiles[selectedTileIndex]];
+                selectedTileIndex = null; // Återställ val
                 renderGrid();
                 checkWin();
             }
@@ -257,16 +224,7 @@
         }
 
         function handleWin() {
-            // 1. Visa sista biten (fyll i hålet)
-            const emptyTile = document.getElementById('empty-tile');
-            if (emptyTile) {
-                emptyTile.classList.remove('empty');
-                emptyTile.classList.add('solved-empty');
-                // Sätt rätt position för sista biten (längst ner till höger)
-                emptyTile.style.backgroundPosition = `-200px -200px`;
-            }
-
-            // 2. Ta bort klick-event (frys spelet)
+            // 1. Ta bort klick-event (frys spelet)
             const allTiles = document.querySelectorAll('.tile');
             allTiles.forEach(t => t.onclick = null);
 
