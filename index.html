@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ett pussel för dig</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #ffe6e6; /* Ljusrosa bakgrund */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            text-align: center;
+            color: #d6336c;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        /* Pussel-containern */
+        #puzzle-container {
+            width: 300px;
+            height: 300px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 2px;
+            background-color: #d6336c;
+            border: 5px solid #d6336c;
+            border-radius: 10px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .tile {
+            width: 100%;
+            height: 100%;
+            background-image: url('valentine.jpg'); /* Här laddas din bild */
+            background-size: 300px 300px; /* Måste matcha containerns storlek */
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        /* Den tomma rutan */
+        .tile.empty {
+            background: #fff0f0;
+            cursor: default;
+            opacity: 0.3;
+            background-image: none; /* Dölj bilden på den tomma rutan initialt */
+        }
+
+        /* När pusslet är löst visar vi bilden på sista biten */
+        .tile.solved-empty {
+            background-image: url('valentine.jpg');
+            background-size: 300px 300px;
+            opacity: 1;
+            cursor: default;
+        }
+
+        /* Sektionen som visas när man vinner */
+        #valentine-proposal {
+            display: none; /* Dold från början */
+            margin-top: 30px;
+            animation: fadeIn 2s;
+        }
+
+        .message {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .question {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 30px;
+            font-size: 1.2rem;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        #yes-btn {
+            background-color: #d6336c;
+            color: white;
+        }
+
+        #yes-btn:hover {
+            background-color: #a61e4d;
+            transform: scale(1.1);
+        }
+
+        #no-btn {
+            background-color: #ccc;
+            color: #555;
+        }
+
+        /* Resultattext efter JA */
+        #final-yay {
+            display: none;
+            margin-top: 20px;
+            font-size: 2rem;
+            color: #d6336c;
+            animation: bounce 1s infinite;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+    </style>
+</head>
+<body>
+
+    <h1 id="instruction">Kan du lösa pusslet?</h1>
+
+    <div id="puzzle-container">
+        <!-- Pusselbitar genereras av JavaScript -->
+    </div>
+
+    <div id="valentine-proposal">
+        <div class="message">You complete me ❤️</div>
+        <div class="question">Vill du vara min valentine?</div>
+        <div class="buttons">
+            <button id="yes-btn">Ja</button>
+            <button id="no-btn">Nej</button>
+        </div>
+        <div id="final-yay">Yay, jag längtar! 🥰</div>
+    </div>
+
+    <script>
+        // Konfiguration
+        const size = 3; // 3x3 grid
+        const container = document.getElementById('puzzle-container');
+        let tiles = []; // Håller koll på nuvarande ordning
+        
+        // Den lösta ordningen (0-8)
+        const solvedState = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+
+        // Initiera spelet
+        function initGame() {
+            // Skapa array med nummer 0-8
+            tiles = [...solvedState];
+            
+            // Blanda pusslet
+            // VIKTIGT: Vi blandar genom att simulera giltiga drag baklänges.
+            // Om man bara slumpar arrayen kan pusslet bli omöjligt att lösa.
+            shuffleTiles();
+            
+            renderGrid();
+        }
+
+        function shuffleTiles() {
+            // Vi börjar med det lösta tillståndet där 8 är den tomma rutan (längst ner till höger)
+            let emptyIndex = 8;
+            let previousIndex = -1;
+
+            // Gör 100 slumpmässiga drag för att blanda
+            for (let i = 0; i < 150; i++) {
+                const neighbors = getNeighbors(emptyIndex);
+                // Försök att inte gå tillbaka direkt till rutan vi kom ifrån för bättre blandning
+                const validNeighbors = neighbors.filter(n => n !== previousIndex);
+                
+                // Om vi fastnar (kantfall), ta vilken granne som helst
+                const targetIndex = validNeighbors.length > 0 
+                    ? validNeighbors[Math.floor(Math.random() * validNeighbors.length)]
+                    : neighbors[Math.floor(Math.random() * neighbors.length)];
+
+                // Byt plats
+                [tiles[emptyIndex], tiles[targetIndex]] = [tiles[targetIndex], tiles[emptyIndex]];
+                previousIndex = emptyIndex;
+                emptyIndex = targetIndex;
+            }
+        }
+
+        function getNeighbors(index) {
+            const row = Math.floor(index / size);
+            const col = index % size;
+            const neighbors = [];
+
+            if (row > 0) neighbors.push(index - size); // Upp
+            if (row < size - 1) neighbors.push(index + size); // Ner
+            if (col > 0) neighbors.push(index - 1); // Vänster
+            if (col < size - 1) neighbors.push(index + 1); // Höger
+
+            return neighbors;
+        }
+
+        function renderGrid() {
+            container.innerHTML = '';
+            tiles.forEach((tileIndex, positionIndex) => {
+                const div = document.createElement('div');
+                div.classList.add('tile');
+                
+                // Räkna ut vilken del av bilden som ska visas
+                // tileIndex är vilken bit det ÄR (0-8)
+                const row = Math.floor(tileIndex / size);
+                const col = tileIndex % size;
+                
+                // Sätt bakgrundsposition (negativa värden för att flytta bilden)
+                div.style.backgroundPosition = `-${col * 100}px -${row * 100}px`;
+
+                // Om det är bit nummer 8, är det den "tomma" rutan
+                if (tileIndex === 8) {
+                    div.classList.add('empty');
+                    div.id = 'empty-tile';
+                } else {
+                    // Lägg till klick-event bara på icke-tomma rutor
+                    div.onclick = () => moveTile(positionIndex);
+                }
+
+                container.appendChild(div);
+            });
+        }
+
+        function moveTile(positionIndex) {
+            const emptyPosition = tiles.indexOf(8); // Hitta var den tomma rutan är nu
+            const neighbors = getNeighbors(emptyPosition);
+
+            // Om rutan vi klickade på är granne med den tomma rutan
+            if (neighbors.includes(positionIndex)) {
+                // Byt plats i arrayen
+                [tiles[emptyPosition], tiles[positionIndex]] = [tiles[positionIndex], tiles[emptyPosition]];
+                renderGrid();
+                checkWin();
+            }
+        }
+
+        function checkWin() {
+            // Kolla om arrayen matchar [0, 1, 2, ... 8]
+            const isSolved = tiles.every((val, index) => val === index);
+
+            if (isSolved) {
+                handleWin();
+            }
+        }
+
+        function handleWin() {
+            // 1. Visa sista biten (fyll i hålet)
+            const emptyTile = document.getElementById('empty-tile');
+            if (emptyTile) {
+                emptyTile.classList.remove('empty');
+                emptyTile.classList.add('solved-empty');
+                // Sätt rätt position för sista biten (längst ner till höger)
+                emptyTile.style.backgroundPosition = `-200px -200px`;
+            }
+
+            // 2. Ta bort klick-event (frys spelet)
+            const allTiles = document.querySelectorAll('.tile');
+            allTiles.forEach(t => t.onclick = null);
+
+            // 3. Ändra rubrik och visa förslaget
+            document.getElementById('instruction').innerText = "Grattis!";
+            document.getElementById('valentine-proposal').style.display = 'block';
+            
+            // Scrolla ner lite mjukt så man ser frågan
+            setTimeout(() => {
+                document.getElementById('valentine-proposal').scrollIntoView({behavior: "smooth"});
+            }, 500);
+        }
+
+        // Knapp-logik
+        document.getElementById('yes-btn').addEventListener('click', () => {
+            document.getElementById('final-yay').style.display = 'block';
+            // Göm knapparna så man inte kan klicka igen
+            document.querySelector('.buttons').style.display = 'none';
+            
+            // Starta konfetti (valfritt, men kul effekt)
+            confettiEffect();
+        });
+
+        document.getElementById('no-btn').addEventListener('click', () => {
+            // Gör ingenting, precis som beställt.
+            console.log("Hon klickade nej, men vi ignorerar det.");
+        });
+
+        // En enkel konfetti-effekt för "Ja"-klicket
+        function confettiEffect() {
+            const colors = ['#ff0000', '#ff69b4', '#ffffff'];
+            for(let i=0; i<100; i++) {
+                const conf = document.createElement('div');
+                conf.style.position = 'fixed';
+                conf.style.left = Math.random() * 100 + 'vw';
+                conf.style.top = '-10px';
+                conf.style.width = '10px';
+                conf.style.height = '10px';
+                conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                conf.style.transition = 'top 3s ease-in, transform 3s ease-in';
+                conf.style.zIndex = '9999';
+                document.body.appendChild(conf);
+
+                setTimeout(() => {
+                    conf.style.top = '110vh';
+                    conf.style.transform = `rotate(${Math.random() * 360}deg)`;
+                }, 100);
+            }
+        }
+
+        // Starta spelet när sidan laddas
+        initGame();
+
+    </script>
+</body>
+</html>
